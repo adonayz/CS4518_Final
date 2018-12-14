@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">CS4518_Final</string>
+    <string name="app_name">LSTM Activity Recognition</string>
     <string name="activity">Activity</string>
     <string name="probability">Probability</string>
     <string name="downstairs">Downstairs</string>

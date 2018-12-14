@@ -12,6 +12,17 @@ import android.widget.CompoundButton;
 import android.widget.TextView;
 import android.widget.ToggleButton;
 
+import com.anychart.AnyChart;
+import com.anychart.AnyChartView;
+import com.anychart.chart.common.dataentry.DataEntry;
+import com.anychart.chart.common.dataentry.ValueDataEntry;
+import com.anychart.charts.Radar;
+import com.anychart.core.radar.series.Line;
+import com.anychart.data.Mapping;
+import com.anychart.data.Set;
+import com.anychart.enums.Align;
+import com.anychart.enums.MarkerType;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -31,8 +42,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private TextView upstairsTextView;
     private TextView walkingTextView;
 
+    private AnyChartView anyChartView;
+
     private ToggleButton inferenceToggleButton;
     private ToggleButton sourceToggleButton;
+    private ToggleButton soundToggleButton;
+    private ToggleButton graphToggleButton;
 
     private TextView inferenceTaskCounterTextView;
     private TextView inferenceElapsedTimeTextView;
@@ -40,6 +55,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private boolean isInferenceOn = false;
     private boolean isRemote = false;
+    private boolean isUpdatingGraph = true;
 
     private TextToSpeech textToSpeech;
 
@@ -63,6 +79,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         inferenceToggleButton = findViewById(R.id.inferenceToggle);
         sourceToggleButton = findViewById(R.id.inferenceSourceToggle);
+        soundToggleButton = findViewById(R.id.soundToggleButton);
+        graphToggleButton = findViewById(R.id.graphToggleButton);
 
         inferenceToggleButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -76,20 +94,36 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 isRemote = b;
             }
         });
+        soundToggleButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                soundToggle(b);
+            }
+        });
+        graphToggleButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                isUpdatingGraph = b;
+            }
+        });
 
-        this.textToSpeech = new TextToSpeech(this, this);
+        soundToggleButton.setChecked(true);
+        graphToggleButton.setChecked(true);
+
+        anyChartView = findViewById(R.id.any_chart_view);
+
+        float[] initialArray = new float[]{0, 0, 0, 0, 0, 0};
+        updateGraph(initialArray);
     }
 
     protected void onPause() {
         getSensorManager().unregisterListener(this);
-        if(textToSpeech !=null){
-            textToSpeech.stop();
-            textToSpeech.shutdown();
-        }
+        soundToggle(false);
         super.onPause();
     }
 
     protected void onResume() {
+        soundToggle(true);
         super.onResume();
         getSensorManager().registerListener(this, getSensorManager().getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME);
     }
@@ -145,17 +179,81 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     @Override
-    public void onInferenceCompleted(String activity, float probability, long elapsedTime) {
+    public void onInferenceCompleted(float[] probabilities, String activity, float probability, long elapsedTime) {
         inferenceCounter--;
         inferenceTaskCounterTextView.setText("Inference Task Count: " + inferenceCounter);
         inferenceElapsedTimeTextView.setText("Last Inference Elapsed Time: " + elapsedTime + "ms");
         textToSpeech.speak(activity, TextToSpeech.QUEUE_ADD, null, Integer.toString(new Random().nextInt()));
+
+        anyChartView.clear();
+        updateGraph(probabilities);
     }
 
     @Override
     public void onInit(int status) {
         if(status != TextToSpeech.ERROR) {
             textToSpeech.setLanguage(Locale.US);
+        }
+    }
+
+
+    private class CustomDataEntry extends ValueDataEntry {
+        public CustomDataEntry(String x, Number value, Number value2, Number value3) {
+            super(x, value);
+            setValue("value2", value2);
+            setValue("value3", value3);
+        }
+    }
+
+    private void updateGraph(float[] probabilities){
+        if(isUpdatingGraph){
+            Radar radar = AnyChart.radar();
+
+            radar.title("Activity Probability Web");
+
+            radar.yScale().minimum(0d);
+            radar.yScale().minimumGap(0d);
+            radar.yScale().ticks().interval(0.2d);
+
+            radar.xAxis().labels().padding(5d, 5d, 5d, 5d);
+
+            radar.legend()
+                    .align(Align.CENTER)
+                    .enabled(true);
+
+            List<DataEntry> data = new ArrayList<>();
+            data.add(new CustomDataEntry("Downstairs", probabilities[0], 0,0));
+            data.add(new CustomDataEntry("Jogging", probabilities[1], 0,0));
+            data.add(new CustomDataEntry("Sitting", probabilities[2], 0,0));
+            data.add(new CustomDataEntry("Standing", probabilities[3], 0,0));
+            data.add(new CustomDataEntry("Upstairs", probabilities[4], 0,0));
+            data.add(new CustomDataEntry("Walking", probabilities[5], 0,0));
+
+            Set set = Set.instantiate();
+            set.data(data);
+            Mapping shamanData = set.mapAs("{ x: 'x', value: 'value' }");
+
+            Line shamanLine = radar.line(shamanData);
+            shamanLine.name("Probability");
+            shamanLine.markers()
+                    .enabled(true)
+                    .type(MarkerType.CIRCLE)
+                    .size(3d);
+
+            radar.tooltip().format("Value: {%Value}");
+
+            anyChartView.setChart(radar);
+        }
+    }
+
+    private void soundToggle(boolean isOn){
+        if(isOn){
+            this.textToSpeech = new TextToSpeech(this, this);
+        }else{
+            if(textToSpeech !=null){
+                textToSpeech.stop();
+                textToSpeech.shutdown();
+            }
         }
     }
 }

@@ -124,7 +124,7 @@ public class RunInferenceAsync extends AsyncTask<float[], Float, float[]>{
         }
         int highestIndex = getHighestIndex();
 
-        inferenceCompletedListener.onInferenceCompleted(labels[highestIndex], results[highestIndex], elapsedTime);
+        inferenceCompletedListener.onInferenceCompleted(results, labels[highestIndex], results[highestIndex], elapsedTime);
     }
 
     private static float round(float d, int decimalPlace) {
